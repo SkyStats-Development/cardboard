@@ -24,6 +24,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+
+
+import net.minecraft.util.Formatting;
 import org.bukkit.Location;
 import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.util.CraftChatMessage;
@@ -37,8 +41,10 @@ import org.cardboardpowered.impl.entity.PlayerImpl;
 import org.cardboardpowered.impl.world.WorldImpl;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.google.common.collect.Lists;
@@ -72,8 +78,9 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.World;
 
+
 @Mixin(PlayerManager.class)
-public class MixinPlayerManager implements IMixinPlayerManager {
+public abstract class MixinPlayerManager implements IMixinPlayerManager {
 
     @Shadow
     public List<ServerPlayerEntity> players;
@@ -92,6 +99,8 @@ public class MixinPlayerManager implements IMixinPlayerManager {
 
     @Shadow
     public Map<UUID, ServerPlayerEntity> playerMap;
+    @Shadow
+    public abstract void broadcast(Text message, Function<ServerPlayerEntity, Text> playerMessageFactory, boolean overlay);
 
     @Override
     public ServerPlayerEntity moveToWorld(ServerPlayerEntity player, ServerWorld worldserver, boolean flag, Location location, boolean avoidSuffocation) {
@@ -155,24 +164,44 @@ public class MixinPlayerManager implements IMixinPlayerManager {
         return player;
     }
 
-    @Inject(at = @At("TAIL"), method = "onPlayerConnect")
-    public void firePlayerJoinEvent(ClientConnection con, ServerPlayerEntity player, CallbackInfo ci) {
-        String joinMessage = Text.translatable("multiplayer.player.joined", new Object[]{player.getDisplayName()}).getString();
+    @Unique
+    private PlayerImpl plr;
 
-        PlayerImpl plr = (PlayerImpl) CraftServer.INSTANCE.getPlayer(player);
+    @Inject(method = "onPlayerConnect", at = @At("HEAD"))
+    public void onConnect(ClientConnection con, ServerPlayerEntity player, CallbackInfo ci) {
+        this.plr = (PlayerImpl) CraftServer.INSTANCE.getPlayer(player);
+    }
+
+    @Redirect(method = "onPlayerConnect", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/PlayerManager;broadcast(Lnet/minecraft/text/Text;Z)V"))
+    public void firePlayerJoinEvent(PlayerManager instance, Text message, boolean overlay) {
+        PlayerImpl plr;
+
+        if(this.plr == null) {
+            instance.broadcast(message, overlay);
+            return;
+        } else {
+            plr = this.plr;
+            this.plr = null;
+        }
+
+        String key = "multiplayer.player.joined";
+        Text name = plr.nms.getDisplayName();
+
+        String joinMessage = Formatting.YELLOW + Text.translatable(key, name).getString();
+
         PlayerJoinEvent playerJoinEvent = new PlayerJoinEvent(plr, joinMessage);
         BukkitEventFactory.callEvent(playerJoinEvent);
-        IMixinPlayNetworkHandler ims = (IMixinPlayNetworkHandler)player.networkHandler;
+        IMixinPlayNetworkHandler ims = (IMixinPlayNetworkHandler)plr.nms.networkHandler;
 
-        if (!ims.cb_get_connection().isOpen()) return;
+        if (!ims.cb_get_connection().isOpen()) {
+            return;
+        }
 
         joinMessage = playerJoinEvent.getJoinMessage();
 
-        if (joinMessage != null && joinMessage.length() > 0) {
-            for (Text line : org.bukkit.craftbukkit.util.CraftChatMessage.fromString(joinMessage)) {
-                // 1.18: CraftServer.server.getPlayerManager().sendToAll(new GameMessageS2CPacket(line, MessageType.SYSTEM, Util.NIL_UUID));
-                // TODO: 1.19
-            	CraftServer.server.getPlayerManager().broadcast(line, entityplayer -> line, false);
+        if (joinMessage != null && !joinMessage.isEmpty()) {
+            for (Text line : CraftChatMessage.fromString(joinMessage)) {
+                broadcast(line, entityplayer -> line, false);
             }
         }
 

@@ -16,6 +16,7 @@ package org.cardboardpowered.mixin;
 
 import java.util.Objects;
 
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.block.CraftBlock;
 import org.bukkit.entity.Player;
@@ -224,6 +225,12 @@ public class MixinServerPlayerInteractionManager implements IMixinServerPlayerIn
 
     @Inject(at = @At("HEAD"), method = "interactBlock", cancellable = true)
     public void interactBlock(ServerPlayerEntity entityplayer, World world, ItemStack itemstack, Hand enumhand, BlockHitResult movingobjectpositionblock, CallbackInfoReturnable<ActionResult> ci) {
+        ActionResult result = UseBlockCallback.EVENT.invoker().interact(entityplayer, world, enumhand, movingobjectpositionblock);
+
+        if(result != null) {
+            ci.setReturnValue(result);
+            return;
+        }
         BlockPos blockposition = movingobjectpositionblock.getBlockPos();
         BlockState iblockdata = world.getBlockState(blockposition);
         ActionResult enuminteractionresult = ActionResult.PASS;

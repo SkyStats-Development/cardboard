@@ -74,6 +74,8 @@ import net.minecraft.registry.Registries;
 import net.minecraft.world.World;
 import net.minecraft.world.level.ServerWorldProperties;
 
+import static org.bukkit.craftbukkit.CraftServer.server;
+
 @SuppressWarnings("deprecation")
 public class BukkitFabricMod implements ModInitializer {
 
@@ -86,15 +88,15 @@ public class BukkitFabricMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("");
-        LOGGER.info("Cardboard - CardboardPowered.org");
-        LOGGER.info("");
 
-        int r = EventRegistery.registerAll(this);
-        LOGGER.info("Registered '" + r + "' iCommon events.");
+            LOGGER.info("");
+            LOGGER.info("Cardboard - CardboardPowered.org");
+            LOGGER.info("Community Release Jar - compiled by https://axle.coffee/");
+            LOGGER.info("This is the \"World Edit Right Click Backport\" Update");
+            LOGGER.info("");
+            int r = EventRegistery.registerAll(this);
+            LOGGER.info("Registered '" + r + "' iCommon events.");
 
-        
-        
         
         //ServerMessageEvents.CHAT_MESSAGE.register((message, source, params) -> {
         //	LOGGER.info("DEBUG: " + message.toString());
@@ -120,7 +122,14 @@ public class BukkitFabricMod implements ModInitializer {
             }
         }
     }
-    
+
+    private void offlinemode() {
+        LOGGER.info("=================================");
+        LOGGER.info("CARDBOARD FATAL WARNING - SERVER IS RUNNING IN OFFLINE MODE");
+        LOGGER.info("IF YOU ATTEMPT TO ASK FOR SUPPORT - YOU WILL BE BANNED FROM THE DISCORD.");
+        LOGGER.info("=================================");
+    }
+
     public PlayerImpl getPlayer_0(ServerPlayerEntity e) {
         return (PlayerImpl) ((IMixinServerEntityPlayer)(Object)e).getBukkitEntity();
     }
@@ -360,3 +369,4 @@ public class BukkitFabricMod implements ModInitializer {
     }
 
 }
+

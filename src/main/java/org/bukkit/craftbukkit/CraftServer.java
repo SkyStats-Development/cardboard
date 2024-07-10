@@ -48,6 +48,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
 
+import net.minecraft.screen.ScreenTexts;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.ClickEvent.Action;
+import net.minecraft.text.MutableText;
+import net.minecraft.text.Text;
+import net.minecraft.text.Texts;
+import net.minecraft.util.Formatting;
 import org.apache.commons.lang.Validate;
 import org.bukkit.BanList;
 import org.bukkit.BanList.Type;
@@ -913,22 +920,59 @@ public class CraftServer implements Server {
 
     @Override
     public boolean dispatchCommand(CommandSender sender, String commandLine) throws CommandException {
-        if (commandLine.startsWith("minecraft:") && sender instanceof Entity) {
+        if(sender instanceof Entity) {
+            ServerCommandSource source = ((CraftEntity) sender).nms.getCommandSource();
+
             try {
-                int result = vanillaCommandManager.dispatcher.execute(commandLine.replace("minecraft:", ""), ((CraftEntity)sender).nms.getCommandSource());
+                String theCommand;
+
+                if(commandLine.startsWith("minecraft:")) {
+                    theCommand = commandLine.substring("minecraft:".length());
+                } else {
+                    theCommand = commandLine;
+                }
+
+                int result = vanillaCommandManager.dispatcher.execute(theCommand, source);
                 return result != -1;
-            } catch (CommandSyntaxException e) {
-                e.printStackTrace();
-                throw new CommandException("Vanilla command syntax error: " + e.getMessage());
+            } catch(net.minecraft.command.CommandException var13) {
+                source.sendError(var13.getTextMessage());
+                return false;
+            } catch(CommandSyntaxException e) {
+                if(e.getType() != CommandSyntaxException
+                        .BUILT_IN_EXCEPTIONS
+                        .dispatcherUnknownCommand()) {
+                    source.sendError(Texts.toText(e.getRawMessage()));
+                    if (e.getInput() != null && e.getCursor() >= 0) {
+                        int i = Math.min(e.getInput().length(), e.getCursor());
+                        MutableText mutableText = Text.empty().formatted(Formatting.GRAY).styled((style) -> {
+                            return style.withClickEvent(new ClickEvent(Action.SUGGEST_COMMAND, "/" + commandLine));
+                        });
+                        if (i > 10) {
+                            mutableText.append(ScreenTexts.ELLIPSIS);
+                        }
+
+                        mutableText.append(e.getInput().substring(Math.max(0, i - 10), i));
+                        if (i < e.getInput().length()) {
+                            Text text = Text.literal(e.getInput().substring(i)).formatted(Formatting.RED, Formatting.UNDERLINE);
+                            mutableText.append(text);
+                        }
+
+                        mutableText.append(Text.translatable("command.context.here").formatted(Formatting.RED, Formatting.ITALIC));
+                        source.sendError(mutableText);
+                    }
+
+                    return false;
+                }
             }
         }
 
-        if (commandMap.dispatch(sender, commandLine))
+        if(commandMap.dispatch(sender, commandLine))
             return true;
 
-        sender.sendMessage("Unknown command. Type " + (sender instanceof Player ? "\"/help\" for help." : "\"help\" for help."));
+        sender.sendMessage("Unknown command. Type \"/help\" for help.");
         return false;
     }
+
 
     @Override
     public Advancement getAdvancement(NamespacedKey arg0) {
